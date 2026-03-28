@@ -1,101 +1,448 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>ScanCraft T.A.S.</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+import React, { useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Search, Building2, MapPin, Globe, Instagram, ClipboardList, Target, Sparkles, FileText, Gauge, CheckCircle2, AlertCircle, Lock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-  <style>
-    body {
-      font-family: Arial;
-      background: #111;
-      color: white;
-      padding: 20px;
-    }
+const verdictMeta = {
+  PASS: { color: "bg-zinc-700", icon: AlertCircle },
+  WATCHLIST: { color: "bg-amber-600", icon: AlertCircle },
+  "TARGET LOCK": { color: "bg-emerald-600", icon: CheckCircle2 },
+  "ELITE TARGET": { color: "bg-cyan-600", icon: Lock },
+};
 
-    input, select, textarea {
-      width: 100%;
-      padding: 10px;
-      margin: 5px 0 15px;
-      border-radius: 6px;
-      border: none;
-    }
+const demoTypeMap = {
+  coffee: "menu/story micro-site",
+  bar: "event/nightlife page",
+  lounge: "event/nightlife page",
+  restaurant: "tourist retention page",
+  boutique: "product spotlight page",
+  wellness: "service funnel page",
+  other: "menu/story micro-site",
+};
 
-    button {
-      padding: 12px;
-      background: orange;
-      border: none;
-      border-radius: 6px;
-      width: 100%;
-      font-size: 16px;
-    }
+function scoreTAS(data) {
+  const rating = parseFloat(data.googleRating || 0);
+  const reviews = parseInt(data.reviewCount || 0, 10) || 0;
 
-    .result {
-      margin-top: 20px;
-      padding: 15px;
-      background: #222;
-      border-radius: 8px;
-    }
-  </style>
-</head>
+  let physical = 0;
+  if (data.footTraffic === "high" || (rating >= 4.3 && reviews >= 100)) physical = 2;
+  else if (data.footTraffic === "medium" || rating >= 4.0 || reviews >= 25) physical = 1;
 
-<body>
+  let gap = 0;
+  const weakSite = data.websiteQuality === "none" || data.websiteQuality === "basic";
+  const weakSocial = data.socialStrength === "weak" || data.socialStrength === "none";
+  const weakConversion = data.conversionPaths === "none" || data.conversionPaths === "weak";
+  const gapCount = [weakSite, weakSocial, weakConversion, !data.onlineOrdering].filter(Boolean).length;
+  if (gapCount >= 3) gap = 2;
+  else if (gapCount >= 1) gap = 1;
 
-<h2>ScanCraft T.A.S.</h2>
+  let fit = 0;
+  if (["coffee", "bar", "lounge", "restaurant", "boutique", "wellness"].includes(data.businessType)) fit = 2;
+  else if (data.businessType) fit = 1;
 
-<label>Business Name</label>
-<input id="name">
+  let revenue = 0;
+  const touristHeavy = data.customerType === "tourists" || data.customerType === "mixed";
+  const strongUpsell = data.productVisuals === "high" || data.productVisuals === "medium";
+  if (touristHeavy && strongUpsell) revenue = 2;
+  else if (touristHeavy || strongUpsell) revenue = 1;
 
-<label>Type</label>
-<select id="type">
-  <option value="coffee">Coffee</option>
-  <option value="restaurant">Restaurant</option>
-  <option value="bar">Bar</option>
-</select>
+  let ease = 0;
+  if (physical >= 1 && gap >= 1 && fit >= 1) ease = 2;
+  else if (physical >= 1 || gap >= 1) ease = 1;
 
-<label>Foot Traffic</label>
-<select id="traffic">
-  <option value="low">Low</option>
-  <option value="medium">Medium</option>
-  <option value="high">High</option>
-</select>
-
-<label>Website Quality</label>
-<select id="website">
-  <option value="none">None</option>
-  <option value="basic">Basic</option>
-  <option value="good">Good</option>
-</select>
-
-<button onclick="runTAS()">Run T.A.S.</button>
-
-<div class="result" id="output"></div>
-
-<script>
-function runTAS() {
-  let score = 0;
-
-  let traffic = document.getElementById("traffic").value;
-  let website = document.getElementById("website").value;
-
-  if (traffic === "high") score += 2;
-  else if (traffic === "medium") score += 1;
-
-  if (website === "none" || website === "basic") score += 2;
-
-  score += 2; // ScanCraft fit baseline
+  const total = physical + gap + fit + revenue + ease;
 
   let verdict = "PASS";
+  if (total >= 10) verdict = "ELITE TARGET";
+  else if (total >= 8) verdict = "ELITE TARGET";
+  else if (total >= 6) verdict = "TARGET LOCK";
+  else if (total >= 4) verdict = "WATCHLIST";
 
-  if (score >= 8) verdict = "ELITE TARGET";
-  else if (score >= 6) verdict = "TARGET LOCK";
-  else if (score >= 4) verdict = "WATCHLIST";
-
-  document.getElementById("output").innerHTML = `
-    <h3>Score: ${score}/10</h3>
-    <h3>${verdict}</h3>
-  `;
+  return {
+    physical,
+    gap,
+    fit,
+    revenue,
+    ease,
+    total,
+    verdict,
+    recommendedDemo: demoTypeMap[data.businessType] || demoTypeMap.other,
+  };
 }
-</script>
 
-</body>
-</html>
+function Field({ icon: Icon, label, children }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-sm text-zinc-300">
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export default function ScanCraftTASApp() {
+  const [form, setForm] = useState({
+    businessName: "",
+    cityState: "",
+    businessType: "restaurant",
+    footTraffic: "medium",
+    googleRating: "4.4",
+    reviewCount: "100",
+    website: "",
+    websiteQuality: "basic",
+    instagram: "",
+    socialStrength: "weak",
+    onlineOrdering: true,
+    conversionPaths: "none",
+    customerType: "mixed",
+    productVisuals: "high",
+    firstImpression: "",
+    opportunities: "",
+  });
+
+  const result = useMemo(() => scoreTAS(form), [form]);
+  const VerdictIcon = verdictMeta[result.verdict].icon;
+
+  const setValue = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const generatedPositioning = useMemo(() => {
+    const name = form.businessName || "This business";
+    const city = form.cityState || "its market";
+    return `${name} already has real-world attention. ScanCraft can help turn that physical attention in ${city} into repeat engagement, stronger perceived value, and a mobile experience that keeps customers connected after they leave.`;
+  }, [form.businessName, form.cityState]);
+
+  const leveragePoints = useMemo(() => {
+    const items = [];
+    if (form.websiteQuality === "none" || form.websiteQuality === "basic") items.push("Weak website experience leaves digital trust and conversion on the table.");
+    if (form.socialStrength === "weak" || form.socialStrength === "none") items.push("Social attention is not being converted into a repeat-customer funnel.");
+    if (form.conversionPaths === "none" || form.conversionPaths === "weak") items.push("There is no strong bridge from visitor interest to a clear action path.");
+    if (form.customerType === "tourists" || form.customerType === "mixed") items.push("Tourist or pass-through traffic creates a retention gap after the customer leaves town.");
+    if (form.productVisuals === "high") items.push("Highly visual products can be turned into stronger digital storytelling and upsell moments.");
+    if (!items.length) items.push("Digital leverage gap appears moderate; this may need deeper manual research.");
+    return items;
+  }, [form]);
+
+  const reportText = useMemo(() => {
+    return `SCANCRAFT T.A.S. REPORT\n\nBusiness: ${form.businessName || "—"}\nLocation: ${form.cityState || "—"}\nType: ${form.businessType}\n\nT.A.S. Score: ${result.total}/10\nVerdict: ${result.verdict}\nRecommended Demo: ${result.recommendedDemo}\n\nScoring Breakdown\n- Physical Strength: ${result.physical}/2\n- Digital Weakness / Opportunity Gap: ${result.gap}/2\n- ScanCraft Fit: ${result.fit}/2\n- Revenue / Retention Potential: ${result.revenue}/2\n- Ease of Pitch / Adoption: ${result.ease}/2\n\nPositioning Angle\n${generatedPositioning}\n\nHidden Leverage Points\n${leveragePoints.map((x) => `- ${x}`).join("\n")}\n\nFirst Impression\n${form.firstImpression || "—"}\n\nObserved Opportunities\n${form.opportunities || "—"}`;
+  }, [form, result, generatedPositioning, leveragePoints]);
+
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(reportText);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 via-zinc-900 to-cyan-950/40 p-6 shadow-2xl"
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">
+                <Sparkles className="h-3.5 w-3.5" />
+                ScanCraft Operator System
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Target Acquisition System</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-300 sm:text-base">
+                Input a target. Score the opportunity. Extract leverage. Position the offer. This interface turns your T.A.S.
+                workflow into a clean operator dashboard.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Card className="border-white/10 bg-white/5 text-white">
+                <CardContent className="p-4">
+                  <div className="text-xs text-zinc-400">Current Score</div>
+                  <div className="mt-1 text-2xl font-bold">{result.total}/10</div>
+                </CardContent>
+              </Card>
+              <Card className="border-white/10 bg-white/5 text-white">
+                <CardContent className="p-4">
+                  <div className="text-xs text-zinc-400">Verdict</div>
+                  <div className="mt-1 text-sm font-semibold">{result.verdict}</div>
+                </CardContent>
+              </Card>
+              <Card className="border-white/10 bg-white/5 text-white">
+                <CardContent className="p-4">
+                  <div className="text-xs text-zinc-400">Demo Type</div>
+                  <div className="mt-1 text-sm font-semibold">{result.recommendedDemo}</div>
+                </CardContent>
+              </Card>
+              <Card className="border-white/10 bg-white/5 text-white">
+                <CardContent className="p-4">
+                  <div className="text-xs text-zinc-400">Mode</div>
+                  <div className="mt-1 text-sm font-semibold">Semi-Automated</div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </motion.div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="border-white/10 bg-zinc-900/70 text-white shadow-2xl backdrop-blur">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <ClipboardList className="h-5 w-5 text-cyan-300" />
+                Target Intake
+              </CardTitle>
+              <CardDescription className="text-zinc-400">
+                Fill in what you know. The system converts raw observations into a structured ScanCraft opportunity read.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="core" className="w-full">
+                <TabsList className="mb-6 grid w-full grid-cols-3 bg-zinc-800/80">
+                  <TabsTrigger value="core">Core</TabsTrigger>
+                  <TabsTrigger value="digital">Digital</TabsTrigger>
+                  <TabsTrigger value="notes">Notes</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="core" className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field icon={Building2} label="Business Name">
+                      <Input value={form.businessName} onChange={(e) => setValue("businessName", e.target.value)} placeholder="Tony's Crab Shack" className="border-white/10 bg-zinc-950/80" />
+                    </Field>
+                    <Field icon={MapPin} label="City / State">
+                      <Input value={form.cityState} onChange={(e) => setValue("cityState", e.target.value)} placeholder="Bandon, Oregon" className="border-white/10 bg-zinc-950/80" />
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <Field icon={Target} label="Business Type">
+                      <Select value={form.businessType} onValueChange={(v) => setValue("businessType", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="coffee">Coffee</SelectItem>
+                          <SelectItem value="bar">Bar</SelectItem>
+                          <SelectItem value="lounge">Lounge</SelectItem>
+                          <SelectItem value="restaurant">Restaurant</SelectItem>
+                          <SelectItem value="boutique">Boutique</SelectItem>
+                          <SelectItem value="wellness">Wellness</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field icon={Gauge} label="Observed Foot Traffic">
+                      <Select value={form.footTraffic} onValueChange={(v) => setValue("footTraffic", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field icon={Search} label="Customer Type">
+                      <Select value={form.customerType} onValueChange={(v) => setValue("customerType", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="locals">Mostly locals</SelectItem>
+                          <SelectItem value="tourists">Mostly tourists</SelectItem>
+                          <SelectItem value="mixed">Mixed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field icon={Gauge} label="Google Rating">
+                      <Input value={form.googleRating} onChange={(e) => setValue("googleRating", e.target.value)} placeholder="4.4" className="border-white/10 bg-zinc-950/80" />
+                    </Field>
+                    <Field icon={FileText} label="Review Count">
+                      <Input value={form.reviewCount} onChange={(e) => setValue("reviewCount", e.target.value)} placeholder="316" className="border-white/10 bg-zinc-950/80" />
+                    </Field>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="digital" className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field icon={Globe} label="Website">
+                      <Input value={form.website} onChange={(e) => setValue("website", e.target.value)} placeholder="https://..." className="border-white/10 bg-zinc-950/80" />
+                    </Field>
+                    <Field icon={Instagram} label="Instagram">
+                      <Input value={form.instagram} onChange={(e) => setValue("instagram", e.target.value)} placeholder="@handle" className="border-white/10 bg-zinc-950/80" />
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field icon={Globe} label="Website Quality">
+                      <Select value={form.websiteQuality} onValueChange={(v) => setValue("websiteQuality", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="basic">Basic</SelectItem>
+                          <SelectItem value="solid">Solid</SelectItem>
+                          <SelectItem value="strong">Strong</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field icon={Instagram} label="Social Strength">
+                      <Select value={form.socialStrength} onValueChange={(v) => setValue("socialStrength", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="weak">Weak</SelectItem>
+                          <SelectItem value="average">Average</SelectItem>
+                          <SelectItem value="strong">Strong</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <Field icon={ClipboardList} label="Online Ordering / Booking">
+                      <Select value={String(form.onlineOrdering)} onValueChange={(v) => setValue("onlineOrdering", v === "true")}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Yes</SelectItem>
+                          <SelectItem value="false">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field icon={Target} label="Conversion Paths">
+                      <Select value={form.conversionPaths} onValueChange={(v) => setValue("conversionPaths", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="weak">Weak</SelectItem>
+                          <SelectItem value="moderate">Moderate</SelectItem>
+                          <SelectItem value="strong">Strong</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field icon={Sparkles} label="Product Visual Strength">
+                      <Select value={form.productVisuals} onValueChange={(v) => setValue("productVisuals", v)}>
+                        <SelectTrigger className="border-white/10 bg-zinc-950/80"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="notes" className="space-y-4">
+                  <Field icon={FileText} label="First Impression">
+                    <Textarea value={form.firstImpression} onChange={(e) => setValue("firstImpression", e.target.value)} placeholder="Warm place, strong foot traffic, older website, could use a better mobile story..." className="min-h-[120px] border-white/10 bg-zinc-950/80" />
+                  </Field>
+                  <Field icon={Sparkles} label="Observed Opportunities">
+                    <Textarea value={form.opportunities} onChange={(e) => setValue("opportunities", e.target.value)} placeholder="Tourist retention, visual menu upgrade, Instagram funnel, QR table system..." className="min-h-[140px] border-white/10 bg-zinc-950/80" />
+                  </Field>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card className="border-white/10 bg-zinc-900/70 text-white shadow-2xl backdrop-blur">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Gauge className="h-5 w-5 text-cyan-300" />
+                  T.A.S. Score Engine
+                </CardTitle>
+                <CardDescription className="text-zinc-400">Five-category score model based on the framework you locked in.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div>
+                    <div className="text-sm text-zinc-400">Final Score</div>
+                    <div className="text-4xl font-bold tracking-tight">{result.total}<span className="text-lg text-zinc-400">/10</span></div>
+                  </div>
+                  <Badge className={`${verdictMeta[result.verdict].color} px-3 py-1 text-sm text-white`}>
+                    <VerdictIcon className="mr-1 h-4 w-4" /> {result.verdict}
+                  </Badge>
+                </div>
+
+                <div className="space-y-4">
+                  {[
+                    ["Physical Strength", result.physical],
+                    ["Digital Gap", result.gap],
+                    ["ScanCraft Fit", result.fit],
+                    ["Revenue Potential", result.revenue],
+                    ["Ease of Pitch", result.ease],
+                  ].map(([label, score]) => (
+                    <div key={label}>
+                      <div className="mb-2 flex items-center justify-between text-sm">
+                        <span className="text-zinc-300">{label}</span>
+                        <span className="font-semibold text-white">{score}/2</span>
+                      </div>
+                      <Progress value={(Number(score) / 2) * 100} className="h-2 bg-zinc-800" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-zinc-900/70 text-white shadow-2xl backdrop-blur">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Target className="h-5 w-5 text-cyan-300" />
+                  Positioning Angle
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-7 text-zinc-300">{generatedPositioning}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="bg-white/10 text-zinc-100">{result.recommendedDemo}</Badge>
+                  <Badge variant="secondary" className="bg-white/10 text-zinc-100">ScanCraft-ready</Badge>
+                  <Badge variant="secondary" className="bg-white/10 text-zinc-100">Pitchable</Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-zinc-900/70 text-white shadow-2xl backdrop-blur">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Sparkles className="h-5 w-5 text-cyan-300" />
+                  Hidden Leverage Points
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {leveragePoints.map((point, i) => (
+                    <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-zinc-300">
+                      {point}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-zinc-900/70 text-white shadow-2xl backdrop-blur">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <FileText className="h-5 w-5 text-cyan-300" />
+                  Exportable Report Draft
+                </CardTitle>
+                <CardDescription className="text-zinc-400">Copy this into chat or use it as the base for your PDF workflow.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea value={reportText} readOnly className="min-h-[260px] border-white/10 bg-zinc-950/80 font-mono text-xs leading-5" />
+                <div className="mt-4 flex gap-3">
+                  <Button onClick={copyReport} className="bg-cyan-500 text-zinc-950 hover:bg-cyan-400">Copy Report</Button>
+                  <Button variant="secondary" className="border border-white/10 bg-white/5 hover:bg-white/10">PDF Ready</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
