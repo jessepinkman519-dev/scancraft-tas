@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ScanCraft T.A.S.</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #111;
+      color: white;
+      padding: 20px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0 15px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    button {
+      padding: 12px;
+      background: orange;
+      border: none;
+      border-radius: 6px;
+      width: 100%;
+      font-size: 16px;
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #222;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>ScanCraft T.A.S.</h2>
+
+<label>Business Name</label>
+<input id="name">
+
+<label>Type</label>
+<select id="type">
+  <option value="coffee">Coffee</option>
+  <option value="restaurant">Restaurant</option>
+  <option value="bar">Bar</option>
+</select>
+
+<label>Foot Traffic</label>
+<select id="traffic">
+  <option value="low">Low</option>
+  <option value="medium">Medium</option>
+  <option value="high">High</option>
+</select>
+
+<label>Website Quality</label>
+<select id="website">
+  <option value="none">None</option>
+  <option value="basic">Basic</option>
+  <option value="good">Good</option>
+</select>
+
+<button onclick="runTAS()">Run T.A.S.</button>
+
+<div class="result" id="output"></div>
+
+<script>
+function runTAS() {
+  let score = 0;
+
+  let traffic = document.getElementById("traffic").value;
+  let website = document.getElementById("website").value;
+
+  if (traffic === "high") score += 2;
+  else if (traffic === "medium") score += 1;
+
+  if (website === "none" || website === "basic") score += 2;
+
+  score += 2; // ScanCraft fit baseline
+
+  let verdict = "PASS";
+
+  if (score >= 8) verdict = "ELITE TARGET";
+  else if (score >= 6) verdict = "TARGET LOCK";
+  else if (score >= 4) verdict = "WATCHLIST";
+
+  document.getElementById("output").innerHTML = `
+    <h3>Score: ${score}/10</h3>
+    <h3>${verdict}</h3>
+  `;
+}
+</script>
+
+</body>
+</html>
